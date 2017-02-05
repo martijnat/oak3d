@@ -35,29 +35,30 @@ def main():
         zbuffer = new_zbuffer(rows,columns)
 
         camera = Camera(0,3,0,
-                        pi/4,0,0)
+                        pi/7,1,0)
 
+        floor_size = 50
 
         floor_height = [[my_noise(w*20,h*20,noise_generator.noise2d)
-                         for w in range(10)]
-                        for h in range(10)]
-        floor_points = [[None for w in range(10)] for h in range(10)]
+                         for w in range(floor_size)]
+                        for h in range(floor_size)]
+        floor_points = [[None for w in range(floor_size)] for h in range(floor_size)]
         floor_triangles = []
 
-        for h in range(10):
-            for w in range(10):
-                x = w - 4
-                z = h - 1
+        for h in range(floor_size):
+            for w in range(floor_size):
+                x = w - floor_size/2
+                z = h - floor_size/2
                 y = 4*floor_height[h][w]
 
                 p = Point(x,y,z,
-                          (0.5+0.5*x,
-                           0.5+0.5*y,
-                           0.5+0.5*z))
+                          (random(),
+                           random(),
+                           random()))
                 floor_points[h][w] = p
 
-        for h in range(0,9):
-            for w in range(0,9):
+        for h in range(floor_size-1):
+            for w in range(floor_size-1):
                 p0 = floor_points[h][w]
                 p1 = floor_points[h+1][w]
                 p2 = floor_points[h][w+1]
