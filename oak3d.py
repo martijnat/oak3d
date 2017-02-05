@@ -31,13 +31,7 @@ def my_noise(x,y,noise,depth=7):
 
 def main():
     try:
-        screen  = new_screen(rows,columns)
-        zbuffer = new_zbuffer(rows,columns)
-
-        camera = Camera(0,3,0,
-                        pi/7,1,0)
-
-        floor_size = 50
+        floor_size = 20
 
         floor_height = [[my_noise(w*20,h*20,noise_generator.noise2d)
                          for w in range(floor_size)]
@@ -67,10 +61,16 @@ def main():
                 floor_triangles.append(Triangle(p2,p1,p3))
 
 
-        for triangle in floor_triangles:
-            draw_triangle_relative(rows,columns,screen,zbuffer,triangle,camera)
-
-        print_screen(rows,columns,screen,output)
+        output.write(esc_hide_cursor)
+        view_steps = 1000
+        for t in range(view_steps):
+            camera = Camera(0,2,0,
+                            0,(t*2*pi) / view_steps,0)
+            screen  = new_screen(rows,columns)
+            zbuffer = new_zbuffer(rows,columns)
+            for triangle in floor_triangles:
+                draw_triangle_relative(rows,columns,screen,zbuffer,triangle,camera)
+            print_screen(rows,columns,screen,output)
     finally:
         output.write(esc_reset_cursor)
 
@@ -80,7 +80,9 @@ def print_screen(rows,columns,screen,output):
         for x in range(columns):
             r,g,b = map_color_to_rgb(screen[y][x])
             output.write(esc_draw_rgb%(r,g,b))
-        output.write("\n")
+        if y < rows-1:
+            output.write("\n")
+    output.write(esc_position_cursor%(0,0))
 
 def draw_triangle_relative(height,width,screen,zbuffer,triangle,camera):
     # get three point of triangle
