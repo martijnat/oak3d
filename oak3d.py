@@ -1,5 +1,14 @@
 #!/usr/bin/env python3
 
+# TODO
+# sky
+# fog
+# normals
+# yellow light from sun
+# blue light from sky
+# backlight against sun
+
+
 from math import sin,cos,pi,atan,atan2,sqrt
 from random import random
 import os
@@ -31,7 +40,7 @@ def my_noise(x,y,noise,depth=7):
 
 def main():
     try:
-        floor_size = 20
+        floor_size = 50
 
         floor_height = [[my_noise(w*20,h*20,noise_generator.noise2d)
                          for w in range(floor_size)]
@@ -62,7 +71,7 @@ def main():
 
 
         output.write(esc_hide_cursor)
-        view_steps = 1000
+        view_steps = 100
         for t in range(view_steps):
             camera = Camera(0,2,0,
                             0,(t*2*pi) / view_steps,0)
@@ -260,7 +269,7 @@ def add_pixel_to_screen(height,width,screen,zbuffer,x,y,z,color):
 
 def map_point_to_screen(point,height,width,zoom=1,ratio=0.55):
     x,y,z,color = point.x,point.y,point.z,point.color
-    new_z       = max(-.99,z)
+    new_z       = sqrt(max(0.01,z))
     new_x       = (zoom*ratio*x/(1+new_z)+1) * width  * 0.5
     new_y       = (zoom*-y/(1+new_z)+1) * height * 0.5
     return Point(new_x,new_y,z,color)
