@@ -37,21 +37,19 @@ esc_reset_cursor    = "\033[?25h"
 
 max_draw_dist = 100
 
-color_fog        = (0,.8,.8)
+color_fog        = (.5,.5,.5)
 color_water      = (1,0,0)
 color_default    = (1,1,1)
 color_sun        = (1.2,1.1,1)
-color_countersun = (.1,.2,.4)
+color_countersun = (0,0.1,.3)
 color_sky        = (0,.2,.2)
+ambient_light    = (0,0,0)
 
 
-vector_test = (1,0,0)
-vector_up   = (0,1,0)
-vector_down = (0,-1,0)
-
-angle_sun        = (-1,-1,-1)
-angle_countersun = (1,-1,1)
-angle_sky        = (0,1,0)
+angle_sun         = (-1,-1,-1)
+angle_countersun1 = (1,0,0)
+angle_countersun2 = (0,1,0)
+angle_countersun3 = (0,0,1)
 
 from opensimplex import OpenSimplex
 noise_generator = OpenSimplex(seed=int(10000*random()))
@@ -113,7 +111,7 @@ def draw_triangle_relative(height,width,screen,zbuffer,triangle,camera):
     # wireframe for reference
 
 def add_lights(point,lights):
-    r,g,b = 0.0,0.0,0.0
+    r,g,b = ambient_light
     for light_color,light_normal in lights:
         brightness = -dot_product(point.normal,light_normal)
         brightness = max(0,min(1,brightness))
@@ -371,8 +369,9 @@ def load_obj(filename):
     for face in faces:
         p1,p2,p3 = face.p1,face.p2,face.p3
         p1,p2,p3 = map((lambda p:add_lights(p,[(color_sun,normalize_vector(angle_sun)),
-                                          (color_countersun,normalize_vector(angle_countersun)),
-                                          (color_sky,normalize_vector(angle_sky))])),[p1,p2,p3])
+                                          (color_countersun,normalize_vector(angle_countersun1)),
+                                          (color_countersun,normalize_vector(angle_countersun2)),
+                                          (color_countersun,normalize_vector(angle_countersun3))])),[p1,p2,p3])
         new_face = Triangle(p1,p2,p3)
         shaded_faces.append(new_face)
 
