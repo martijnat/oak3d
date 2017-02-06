@@ -68,13 +68,14 @@ def main():
         output.write(esc_hide_cursor)
         view_steps = 200
         dist_from_model = -0.6
-        t = 0
-        while True:
-            t += 1
-            u = 0
-            v = 2*pi*t* 0.005
-            w = 0
 
+        steps = 200
+        rendered_screens = []
+        # render the first frames manual
+        for step in range(steps):
+            u = 0
+            v = 2*pi*step/steps
+            w = 0
             camera = Camera(x-d*sin(-v),
                             y,
                             z+d*cos(-v),
@@ -83,7 +84,14 @@ def main():
             zbuffer = new_zbuffer(rows,columns)
             for triangle in model:
                 draw_triangle_relative(rows,columns,screen,zbuffer,triangle,camera)
+            rendered_screens.append(screen)
             print_screen(rows,columns,screen,output)
+        # then repeat from memory
+        while True:
+            for screen in rendered_screens:
+                print_screen(rows,columns,screen,output)
+
+
     except KeyboardInterrupt:
         pass
     finally:
