@@ -1,13 +1,20 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 
-# TODO
-# sky
-# fog
-# normals
-# yellow light from sun
-# blue light from sky
-# backlight against sun
+# Copyright (C) 2017  Martijn Terpstra
 
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from math import sin,cos,pi,atan,atan2,sqrt
 from random import random
@@ -19,7 +26,7 @@ import argparse
 
 columns, rows = shutil.get_terminal_size((80, 20))
 
-output = open(sys.argv[1],'w') if len(sys.argv) > 1 else sys.stdout
+output = sys.stdout
 
 # escape codes, send to stdout to do stuff
 esc_draw_rgb        = "\x1b[48;2;%i;%i;%im "
@@ -28,58 +35,59 @@ esc_clear_screen    = "\033[1J"
 esc_hide_cursor     = "\033[?25l"
 esc_reset_cursor    = "\033[?25h"
 
-max_draw_dist = 9999
+max_draw_dist = 100
 
+color_fog        = (0,.8,.8)
+color_water      = (1,0,0)
+color_default    = (1,1,1)
+color_sun        = (1.2,1.1,1)
+color_countersun = (.1,.2,.4)
+color_sky        = (0,.2,.2)
+
+
+vector_test = (1,0,0)
+vector_up   = (0,1,0)
+vector_down = (0,-1,0)
+
+angle_sun        = (-1,-1,-1)
+angle_countersun = (1,-1,1)
+angle_sky        = (0,1,0)
 
 from opensimplex import OpenSimplex
 noise_generator = OpenSimplex(seed=int(10000*random()))
-def my_noise(x,y,noise,depth=7):
+def my_noise(x,y,noise,depth=10):
     return sum([noise(x/(2**(depth-d)),y/(2**(depth-d))) / (2**(d+1))
                 for d in range(depth)])
 
-
 def main():
     try:
-        floor_size = 50
+        model = load_obj(sys.argv[1])
 
-        floor_height = [[my_noise(w*20,h*20,noise_generator.noise2d)
-                         for w in range(floor_size)]
-                        for h in range(floor_size)]
-        floor_points = [[None for w in range(floor_size)] for h in range(floor_size)]
-        floor_triangles = []
+        x,y,z,d = get_camera_values(model)
 
-        for h in range(floor_size):
-            for w in range(floor_size):
-                x = w - floor_size/2
-                z = h - floor_size/2
-                y = 4*floor_height[h][w]
-
-                p = Point(x,y,z,
-                          (random(),
-                           random(),
-                           random()))
-                floor_points[h][w] = p
-
-        for h in range(floor_size-1):
-            for w in range(floor_size-1):
-                p0 = floor_points[h][w]
-                p1 = floor_points[h+1][w]
-                p2 = floor_points[h][w+1]
-                p3 = floor_points[h+1][w+1]
-                floor_triangles.append(Triangle(p0,p1,p2))
-                floor_triangles.append(Triangle(p2,p1,p3))
-
+        max_draw_dist = d
 
         output.write(esc_hide_cursor)
-        view_steps = 100
-        for t in range(view_steps):
-            camera = Camera(0,2,0,
-                            0,(t*2*pi) / view_steps,0)
+        view_steps = 200
+        dist_from_model = -0.6
+        t = 0
+        while True:
+            t += 1
+            u = 0
+            v = 2*pi*t* 0.005
+            w = 0
+
+            camera = Camera(x-d*sin(-v),
+                            y,
+                            z+d*cos(-v),
+                            u,v+pi,w)
             screen  = new_screen(rows,columns)
             zbuffer = new_zbuffer(rows,columns)
-            for triangle in floor_triangles:
+            for triangle in model:
                 draw_triangle_relative(rows,columns,screen,zbuffer,triangle,camera)
             print_screen(rows,columns,screen,output)
+    except KeyboardInterrupt:
+        pass
     finally:
         output.write(esc_reset_cursor)
 
@@ -98,11 +106,29 @@ def draw_triangle_relative(height,width,screen,zbuffer,triangle,camera):
     p1 = map_point_to_screen(point_relative_to_camera(triangle.p1,camera),height,width)
     p2 = map_point_to_screen(point_relative_to_camera(triangle.p2,camera),height,width)
     p3 = map_point_to_screen(point_relative_to_camera(triangle.p3,camera),height,width)
-
-
+    # add fog
+    p1,p2,p3 = [add_fog(p) for p in [p1,p2,p3]]
 
     draw_triangle(height,width,screen,zbuffer,p1,p2,p3)
     # wireframe for reference
+
+def add_lights(point,lights):
+    r,g,b = 0.0,0.0,0.0
+    for light_color,light_normal in lights:
+        brightness = -dot_product(point.normal,light_normal)
+        brightness = max(0,min(1,brightness))
+        _r,_g,_b = [sqrt(brightness)*c1*c2 for c1,c2 in zip(point.color,light_color)]
+        r += _r
+        g += _g
+        b += _b
+    return Point(point.x,point.y,point.z,(r,g,b),point.normal)
+
+
+def add_fog(p):
+    return Point(p.x,p.y,p.z,
+                 blend_color(p.color,color_fog,1-(p.z / max_draw_dist)),
+                 p.normal)
+
 
 def draw_triangle(height,width,screen,zbuffer,p1,p2,p3):
     class Scanbuffer():
@@ -115,7 +141,7 @@ def draw_triangle(height,width,screen,zbuffer,p1,p2,p3):
             self.minC=[0 for _ in range(height*2)]
             self.maxC=[0 for _ in range(height*2)]
         def draw_part(self,y_min,y_max):
-            for y in range(max(-height,int(y_min)),min(height,int(y_max))):
+            for y in range(max(-height,int(y_min)),min(height,int(y_max))+1):
                 try:
                     draw_line_horizontal(height,width,screen,zbuffer,y,
                                          self.minX[y],self.maxX[y],
@@ -203,6 +229,11 @@ def draw_line_horizontal(height,width,screen,zbuffer,y,x1,x2,z1,z2,c1,c2):
         z1,z2 = z2,z1
     else:
         pass
+
+    # check if line is inside screen
+    if x1 > width or x2 < 0 or y <0 or y > height:
+        return
+
     for x in range(x1,x2):
         ratio = (float(x) - x1) / (float(x2) - x1)
         color = blend_color(c2,c1,ratio)
@@ -210,13 +241,13 @@ def draw_line_horizontal(height,width,screen,zbuffer,y,x1,x2,z1,z2,c1,c2):
         add_pixel_to_screen(height,width,screen,zbuffer,x,y,z,color)
 
 def new_screen(height,width):
-    return [[(0,0,0) for x in range(width)] for y in range(height)]
+    return [[color_fog for x in range(width)] for y in range(height)]
 
 def new_zbuffer(height,width):
     return [[max_draw_dist for x in range(width)] for y in range(height)]
 
 class Point():
-    def __init__(self,x,y,z,color=(1,1,1),normal=(0,0,1)):
+    def __init__(self,x,y,z,color,normal):
         self.x,self.y,self.z,self.color,self.normal = x,y,z,color,normal
 
 class Triangle():
@@ -225,32 +256,52 @@ class Triangle():
 
 class Camera():
     def __init__(self,x=0,y=0,z=0,u=0,v=0,w=0):
-        global zoomfactor
         self.x,self.y,self.z = x,y,z              # position
         self.u,self.v,self.w = u,v,w              # angle
 
 def point_relative_to_camera(point,camera):
     "Gives newcoordinate for a point relative to a cameras position and angle"
-    # first we tranlate to camera
+    # tranlate to camera
     x = point.x - camera.x
     y = point.y - camera.y
     z = point.z - camera.z
+
+    x,y,z = rotate_3d(x,y,z,
+                      camera.u,camera.v,camera.w)
+
+    n1,n2,n3 = point.normal
+    new_normal = rotate_3d(n1,n2,n3,
+                           camera.u,camera.v,camera.w)
+
+    return Point(x,y,z,point.color,new_normal)
+
+def map_color_to_rgb(color):
+    return map((lambda c:int(min(1,max(0,c**2))*255)),color)
+
+def rotate_3d(x,y,z,u,v,w):
     # shorthands so the projection formula is easier to read
-    sx,cx,sy,cy,sz,cz = (sin(camera.u),
-                         cos(camera.u),
-                         sin(camera.v),
-                         cos(camera.v),
-                         sin(camera.w),
-                         cos(camera.w))
+    sx,cx,sy,cy,sz,cz = (sin(u), cos(u), sin(v), cos(v), sin(w), cos(w))
     # Rotation around camera
     x, y, z = (cy* (sz*y + cz*x) - sy*z,
                sx* (cy*z + sy*(sz*y + cz*x)) + cx*(cz*y-sz*x),
                cx* (cy*z + sy*(sz*y + cz*x)) - sx*(cz*y-sz*x))
 
-    return Point(x,y,z,point.color)
+    return x,y,z
 
-def map_color_to_rgb(color):
-    return map((lambda c:int(min(1,max(0,c))*255)),color)
+def normalize_vector(v):
+    a,b,c = v
+    size  = sqrt(a*a + b*b + c*c)
+    return a/size , b/size , c/size
+
+def random_vector():
+    return normalize_vector((0.5-random(),0.5-random(),0.5-random()))
+
+def dot_product(v1,v2):
+    return sum([a*b for (a,b) in zip(v1,v2)])
+
+def get_terrain_color(x,y,z):
+    return color_default
+
 
 def add_point_to_screen(height,width,screen,zbuffer,point):
     point = map_point_to_screen(point,height,width)
@@ -265,15 +316,91 @@ def add_pixel_to_screen(height,width,screen,zbuffer,x,y,z,color):
     zbuffer[int(y)][int(x)] = z
 
 
-
-
-def map_point_to_screen(point,height,width,zoom=1,ratio=0.55):
+def map_point_to_screen(point,height,width,zoom=5,ratio=0.4):
     x,y,z,color = point.x,point.y,point.z,point.color
-    new_z       = sqrt(max(0.01,z))
+    new_z       = max(0.01,z)
     new_x       = (zoom*ratio*x/(1+new_z)+1) * width  * 0.5
     new_y       = (zoom*-y/(1+new_z)+1) * height * 0.5
-    return Point(new_x,new_y,z,color)
+    return Point(new_x,new_y,z,color,point.normal)
 
+def load_obj(filename):
+    "Parse an .obj file and return an array of Triangles"
+    global draw_dist_min,draw_dist_max,zoomfactor
+    obj_file = open(filename)
+    vertices,normals,faces = [],[],[]
+    # each line represents 1 thing, we care only about
+    # vertices(points) and faces(triangles)
+    for linenumber,line in enumerate(open(filename).readlines()):
+        c = line[0]
+        if c == "v":            # vertices information
+            if line[1] in "t":  # We ignore textures
+                pass
+            elif line[1] == "n":  # normals
+                coords = list(map(float,line[2:-1].split()))
+                normals.append((coords[0],coords[1],coords[2]))
+            else:
+                coords = list(map(float,line[1:-1].split()))
+                vertices.append(Point(coords[0],coords[1],coords[2],(color_default),random_vector()))
+        elif c == "f":          # face information
+            if "/" in line: # check for a/b/c syntax
+                if "//" in line: # check for a//b b//c c//d sumtax
+                    indexes = [list(map(lambda x:int(x.split("//")[0]),
+                                        miniline.split(" ")))[0]-1
+                               for miniline in line[2:-1].split()]
+                    normali = [list(map(lambda x:int(x.split("//")[1]),
+                                        miniline.split(" ")))[0]-1
+                               for miniline in line[2:-1].split()]
+                else:
+                    indexes = [list(map(int,miniline.split("/")))[0]-1
+                               for miniline in line[2:-1].split()]
+                    normali = [list(map(lambda x:int(x.split("/")[2]),
+                                        miniline.split(" ")))[0]-1
+                               for miniline in line[2:-1].split()]
+
+            p1,p2,p3 = vertices[indexes[0]], vertices[indexes[1]], vertices[indexes[2]]
+            n1,n2,n3 = normals[normali[0]], normals[normali[1]], normals[normali[2]]
+            face = Triangle(Point(p1.x,p1.y,p1.z,p1.color,n1),
+                            Point(p2.x,p2.y,p2.z,p2.color,n2),
+                            Point(p3.x,p3.y,p3.z,p3.color,n3))
+            faces.append(face)
+        else:
+            pass                # ignore all other information
+
+    # add lighting
+    shaded_faces = []
+    for face in faces:
+        p1,p2,p3 = face.p1,face.p2,face.p3
+        p1,p2,p3 = map((lambda p:add_lights(p,[(color_sun,normalize_vector(angle_sun)),
+                                          (color_countersun,normalize_vector(angle_countersun)),
+                                          (color_sky,normalize_vector(angle_sky))])),[p1,p2,p3])
+        new_face = Triangle(p1,p2,p3)
+        shaded_faces.append(new_face)
+
+    if len(vertices)<=0:
+            sys.stderr.write("Model contains no vertices\n")
+            quit(1)
+
+    return shaded_faces
+
+def get_camera_values(model):
+    vertices = [v for t in model for v in [t.p1,t.p2,t.p3]]
+    min_x    = min(map(lambda v:v.x,vertices))
+    min_y    = min(map(lambda v:v.y,vertices))
+    min_z    = min(map(lambda v:v.z,vertices))
+    max_x    = max(map(lambda v:v.x,vertices))
+    max_y    = max(map(lambda v:v.y,vertices))
+    max_z    = max(map(lambda v:v.z,vertices))
+
+    center_x = (max_x + min_x) / 2
+    center_y = (max_y + min_y) / 2
+    center_z = (max_z + min_z) / 2
+
+    # Pythagorean theorem
+    dist_from_center = min([abs(max_x-min_x), abs(max_y-min_y), abs(max_z-min_z)])
+
+    return center_x,center_y,center_z,(sum([max_x-min_x,max_y-min_y,max_z-min_z])/3)**2
 
 if __name__ == "__main__":
     main()
+
+
