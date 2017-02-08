@@ -25,24 +25,27 @@ import time
 import argparse
 
 columns, rows = shutil.get_terminal_size((80, 20))
+rows = rows*2
 
 output = sys.stdout
 
+half_block          = "▄"
 # escape codes, send to stdout to do stuff
-esc_draw_rgb        = "\x1b[48;2;%i;%i;%im "
+esc_draw_rgb_bg     = "\x1b[48;2;%i;%i;%im"
+esc_draw_rgb_fg     = "\x1b[38;2;%i;%i;%im"
 esc_position_cursor = "\033[%i;%iH"
 esc_clear_screen    = "\033[1J"
 esc_hide_cursor     = "\033[?25l"
 esc_reset_cursor    = "\033[?25h"
 
-max_draw_dist = 100
+max_draw_dist = 99999
 
-color_fog        = (.5,.5,.5)
+color_fog        = (0,.5,.5)
 color_water      = (1,0,0)
-color_default    = (1,1,1)
-color_sun        = (1.2,1.1,1)
-color_countersun = (0,0.1,.3)
-color_sky        = (0,.2,.2)
+color_default    = lambda x,y,z: (1,1,1)
+color_sun        = (1.5,1.1,1)
+color_countersun = (.2,.2,.3)
+color_sky        = (.2,.2,.2)
 ambient_light    = (0,0,0)
 
 
@@ -51,19 +54,15 @@ angle_countersun1 = (1,0,0)
 angle_countersun2 = (0,1,0)
 angle_countersun3 = (0,0,1)
 
-from opensimplex import OpenSimplex
-noise_generator = OpenSimplex(seed=int(10000*random()))
-def my_noise(x,y,noise,depth=10):
-    return sum([noise(x/(2**(depth-d)),y/(2**(depth-d))) / (2**(d+1))
-                for d in range(depth)])
-
 def main():
     try:
         model = load_obj(sys.argv[1])
 
         x,y,z,d = get_camera_values(model)
 
-        max_draw_dist = d
+        global max_draw_dist
+        max_draw_dist = d*2
+        # d = 100
 
         output.write(esc_hide_cursor)
         view_steps = 200
@@ -99,11 +98,14 @@ def main():
 
 def print_screen(rows,columns,screen,output):
     output.write(esc_position_cursor%(0,0))
-    for y in range(rows):
-        for x in range(columns):
-            r,g,b = map_color_to_rgb(screen[y][x])
-            output.write(esc_draw_rgb%(r,g,b))
-        if y < rows-1:
+    for y in range(0,rows,2):
+        for x in range(0,columns,1):
+            r1,g1,b1 = map_color_to_rgb(screen[y][x])
+            r2,g2,b2 = map_color_to_rgb(screen[y+1][x])
+            output.write(esc_draw_rgb_bg%(r1,g1,b1))
+            output.write(esc_draw_rgb_fg%(r2,g2,b2))
+            output.write(half_block)
+        if y < (rows//2)-1:
             output.write("\n")
     output.write(esc_position_cursor%(0,0))
 
@@ -302,6 +304,9 @@ def normalize_vector(v):
 def random_vector():
     return normalize_vector((0.5-random(),0.5-random(),0.5-random()))
 
+def random_color():
+    return random(),random(),random()
+
 def dot_product(v1,v2):
     return sum([a*b for (a,b) in zip(v1,v2)])
 
@@ -322,7 +327,7 @@ def add_pixel_to_screen(height,width,screen,zbuffer,x,y,z,color):
     zbuffer[int(y)][int(x)] = z
 
 
-def map_point_to_screen(point,height,width,zoom=5,ratio=0.4):
+def map_point_to_screen(point,height,width,zoom=2.5,ratio=0.4):
     x,y,z,color = point.x,point.y,point.z,point.color
     new_z       = max(0.01,z)
     new_x       = (zoom*ratio*x/(1+new_z)+1) * width  * 0.5
@@ -346,7 +351,7 @@ def load_obj(filename):
                 normals.append((coords[0],coords[1],coords[2]))
             else:
                 coords = list(map(float,line[1:-1].split()))
-                vertices.append(Point(coords[0],coords[1],coords[2],(color_default),random_vector()))
+                vertices.append(Point(coords[0],coords[1],coords[2],color_default(coords[0],coords[1],coords[2]),random_vector()))
         elif c == "f":          # face information
             if "/" in line: # check for a/b/c syntax
                 if "//" in line: # check for a//b b//c c//d sumtax
@@ -405,9 +410,7 @@ def get_camera_values(model):
     # Pythagorean theorem
     dist_from_center = min([abs(max_x-min_x), abs(max_y-min_y), abs(max_z-min_z)])
 
-    return center_x,center_y,center_z,(sum([max_x-min_x,max_y-min_y,max_z-min_z])/3)**2
+    return center_x,center_y,center_z,abs(max_y-min_y)
 
 if __name__ == "__main__":
     main()
-
-
