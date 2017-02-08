@@ -72,11 +72,11 @@ def main():
         rendered_screens = []
         # render the first frames manual
         for step in range(steps):
-            u = 0
+            u = 0.1*pi*sin(2*pi*step/steps)
             v = 2*pi*step/steps
             w = 0
             camera = Camera(x-d*sin(-v),
-                            y,
+                            y-d*sin(-u),
                             z+d*cos(-v),
                             u,v+pi,w)
             screen  = new_screen(rows,columns)
