@@ -25,7 +25,10 @@ import time
 import argparse
 
 columns, rows = shutil.get_terminal_size((80, 20))
-rows = rows*2
+
+samples_per_pixel = 2
+rows = rows*2*samples_per_pixel
+columns = columns * samples_per_pixel
 
 output = sys.stdout
 
@@ -40,7 +43,7 @@ esc_reset_cursor    = "\033[?25h"
 
 max_draw_dist = 99999
 
-color_fog        = (0,.5,.5)
+color_fog        = (.1,.1,.1)
 color_water      = (1,0,0)
 color_default    = lambda x,y,z: (1,1,1)
 color_sun        = (1.5,1.1,1)
@@ -96,17 +99,25 @@ def main():
     finally:
         output.write(esc_reset_cursor)
 
+def sample(screen,y,x,samples_per_pixel):
+    rsum,gsum,bsum = 0.0,0.0,0.0
+    for dy in range(samples_per_pixel):
+        for dx in range(samples_per_pixel):
+            r,g,b = screen[y+dy][x+dx]
+            rsum += r / samples_per_pixel
+            gsum += g / samples_per_pixel
+            bsum += b / samples_per_pixel
+    return rsum/samples_per_pixel,gsum/samples_per_pixel,bsum/samples_per_pixel
+
 def print_screen(rows,columns,screen,output):
     output.write(esc_position_cursor%(0,0))
-    for y in range(0,rows,2):
-        for x in range(0,columns,1):
-            r1,g1,b1 = map_color_to_rgb(screen[y][x])
-            r2,g2,b2 = map_color_to_rgb(screen[y+1][x])
+    for y in range(0,rows,2*samples_per_pixel):
+        for x in range(0,columns,samples_per_pixel):
+            r1,g1,b1 = map_color_to_rgb(sample(screen,y,x,samples_per_pixel))
+            r2,g2,b2 = map_color_to_rgb(sample(screen,y+samples_per_pixel,x,samples_per_pixel))
             output.write(esc_draw_rgb_bg%(r1,g1,b1))
             output.write(esc_draw_rgb_fg%(r2,g2,b2))
             output.write(half_block)
-        if y < (rows//2)-1:
-            output.write("\n")
     output.write(esc_position_cursor%(0,0))
 
 def draw_triangle_relative(height,width,screen,zbuffer,triangle,camera):
@@ -284,7 +295,7 @@ def point_relative_to_camera(point,camera):
     return Point(x,y,z,point.color,new_normal)
 
 def map_color_to_rgb(color):
-    return map((lambda c:int(min(1,max(0,c**2))*255)),color)
+    return map((lambda c:int(sqrt(min(1,max(0,c)))*255)),color)
 
 def rotate_3d(x,y,z,u,v,w):
     # shorthands so the projection formula is easier to read
