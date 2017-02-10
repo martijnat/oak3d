@@ -16,21 +16,18 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from math import sin,cos,pi,atan,atan2,sqrt
+from math   import sin,cos,pi,sqrt
 from random import random
-import os
-import shutil
-import sys
-import time
-import argparse
+from shutil import get_terminal_size
+from sys    import stdout,stderr,argv
+from time   import sleep
 
-columns, rows = shutil.get_terminal_size((80, 20))
+columns, rows = get_terminal_size((80, 20))
 
 samples_per_pixel = 2
 rows = rows*2*samples_per_pixel
 columns = columns * samples_per_pixel
 
-output = sys.stdout
 
 half_block          = "▄"
 # escape codes, send to stdout to do stuff
@@ -49,17 +46,24 @@ color_default    = lambda x,y,z: (1,1,1)
 color_sun        = (1.5,1.1,1)
 color_countersun = (.2,.2,.3)
 color_sky        = (.2,.2,.2)
+
+gamma_correction = 1/2.2
 ambient_light    = (0,0,0)
 
-
-angle_sun         = (-1,-1,-1)
-angle_countersun1 = (1,0,0)
+angle_sun         = (1,-1,-1)
+angle_countersun1 = (-1,0,0)
 angle_countersun2 = (0,1,0)
 angle_countersun3 = (0,0,1)
 
+
 def main():
     try:
-        model = load_obj(sys.argv[1])
+        if len(argv) > 1:
+            model = load_obj(argv[1])
+        else:
+            stderr.write("Usage: %s /path/to/file.obj\n"%argv[0])
+            quit(1)
+
 
         x,y,z,d = get_camera_values(model)
 
@@ -67,12 +71,12 @@ def main():
         max_draw_dist = d*2
         # d = 100
 
-        output.write(esc_hide_cursor)
+        stdout.write(esc_hide_cursor)
         view_steps = 200
         dist_from_model = -0.6
 
         steps = 200
-        rendered_screens = []
+        prerendered_screens = []
         # render the first frames manual
         for step in range(steps):
             u = 0.1*pi*sin(2*pi*step/steps)
@@ -86,18 +90,37 @@ def main():
             zbuffer = new_zbuffer(rows,columns)
             for triangle in model:
                 draw_triangle_relative(rows,columns,screen,zbuffer,triangle,camera)
-            rendered_screens.append(screen)
-            print_screen(rows,columns,screen,output)
-        # then repeat from memory
-        while True:
-            for screen in rendered_screens:
-                print_screen(rows,columns,screen,output)
+            print_string = print_screen(rows,columns,screen,stdout)
+            prerendered_screens.append(print_string)
+
+        if len(argv) > 2:
+            output_file = open(argv[2],'w')
+            output_file.write("#!/bin/sh\n")
+            output_file.write("# Script generated with oak3d\n\n\n")
+            output_file.write("echo -en \"\033[1J\"")
+            output_file.write("echo -en \"\\033[?25l\"")
+            for screen in prerendered_screens:
+                # output_file.write("\ncat << 'EOF'\n")
+                output_file.write("echo -en \"")
+                output_file.write(screen)
+                output_file.write("\"\n")
+                # output_file.write("\nEOF\n")
+                output_file.write("sleep 0.01\n")
+            output_file.write("\n\necho -en \"\033[?25h\"")
+            output_file.write("\n\necho -en \"\\033[?25l\"")
+            stdout.write(esc_reset_cursor)
+        else:
+            # then repeat from memory
+            while True:
+                for screen in prerendered_screens:
+                    stdout.write(screen)
+                    sleep(0.01)
 
 
     except KeyboardInterrupt:
         pass
     finally:
-        output.write(esc_reset_cursor)
+        stdout.write(esc_reset_cursor)
 
 def sample(screen,y,x,samples_per_pixel):
     rsum,gsum,bsum = 0.0,0.0,0.0
@@ -109,16 +132,19 @@ def sample(screen,y,x,samples_per_pixel):
             bsum += b / samples_per_pixel
     return rsum/samples_per_pixel,gsum/samples_per_pixel,bsum/samples_per_pixel
 
-def print_screen(rows,columns,screen,output):
-    output.write(esc_position_cursor%(0,0))
+def print_screen(rows,columns,screen,stdout):
+    print_string = esc_position_cursor%(0,0)
     for y in range(0,rows,2*samples_per_pixel):
         for x in range(0,columns,samples_per_pixel):
             r1,g1,b1 = map_color_to_rgb(sample(screen,y,x,samples_per_pixel))
             r2,g2,b2 = map_color_to_rgb(sample(screen,y+samples_per_pixel,x,samples_per_pixel))
-            output.write(esc_draw_rgb_bg%(r1,g1,b1))
-            output.write(esc_draw_rgb_fg%(r2,g2,b2))
-            output.write(half_block)
-    output.write(esc_position_cursor%(0,0))
+            print_string += esc_draw_rgb_bg%(r1,g1,b1) + esc_draw_rgb_fg%(r2,g2,b2) + half_block
+        if y < rows - 2*samples_per_pixel:
+            print_string+="\n"
+
+    # print everything at the end to prevent screen tearing
+    stdout.write(print_string)
+    return print_string
 
 def draw_triangle_relative(height,width,screen,zbuffer,triangle,camera):
     # get three point of triangle
@@ -129,7 +155,6 @@ def draw_triangle_relative(height,width,screen,zbuffer,triangle,camera):
     p1,p2,p3 = [add_fog(p) for p in [p1,p2,p3]]
 
     draw_triangle(height,width,screen,zbuffer,p1,p2,p3)
-    # wireframe for reference
 
 def add_lights(point,lights):
     r,g,b = ambient_light
@@ -216,7 +241,6 @@ def draw_triangle(height,width,screen,zbuffer,p1,p2,p3):
     sbuffer.write_line(p1, p3, True)
     sbuffer.draw_part(p1.y,p3.y)
 
-
 def blend_color(color1,color2,ratio):
     r1,g1,b1 = color1
     r2,g2,b2 = color2
@@ -295,7 +319,7 @@ def point_relative_to_camera(point,camera):
     return Point(x,y,z,point.color,new_normal)
 
 def map_color_to_rgb(color):
-    return map((lambda c:int(sqrt(min(1,max(0,c)))*255)),color)
+    return map((lambda c:int((min(1,max(0,c))**(gamma_correction))*255)),color)
 
 def rotate_3d(x,y,z,u,v,w):
     # shorthands so the projection formula is easier to read
@@ -310,7 +334,9 @@ def rotate_3d(x,y,z,u,v,w):
 def normalize_vector(v):
     a,b,c = v
     size  = sqrt(a*a + b*b + c*c)
-    return a/size , b/size , c/size
+    if size > 0:
+        return a/size , b/size , c/size
+    return (0,0,0)
 
 def random_vector():
     return normalize_vector((0.5-random(),0.5-random(),0.5-random()))
@@ -364,6 +390,7 @@ def load_obj(filename):
                 coords = list(map(float,line[1:-1].split()))
                 vertices.append(Point(coords[0],coords[1],coords[2],color_default(coords[0],coords[1],coords[2]),random_vector()))
         elif c == "f":          # face information
+            normali = None
             if "/" in line: # check for a/b/c syntax
                 if "//" in line: # check for a//b b//c c//d sumtax
                     indexes = [list(map(lambda x:int(x.split("//")[0]),
@@ -375,16 +402,27 @@ def load_obj(filename):
                 else:
                     indexes = [list(map(int,miniline.split("/")))[0]-1
                                for miniline in line[2:-1].split()]
-                    normali = [list(map(lambda x:int(x.split("/")[2]),
+                    normali = [list(map(lambda x:int(x.split("/")[-1]),
                                         miniline.split(" ")))[0]-1
                                for miniline in line[2:-1].split()]
+            else:
+                indexes = list(map(lambda x:(int(x) - 1),line[1:-1].split()))
 
-            p1,p2,p3 = vertices[indexes[0]], vertices[indexes[1]], vertices[indexes[2]]
-            n1,n2,n3 = normals[normali[0]], normals[normali[1]], normals[normali[2]]
-            face = Triangle(Point(p1.x,p1.y,p1.z,p1.color,n1),
-                            Point(p2.x,p2.y,p2.z,p2.color,n2),
-                            Point(p3.x,p3.y,p3.z,p3.color,n3))
-            faces.append(face)
+            for i in range(0,len(indexes)-2):
+                try:
+                    p1,p2,p3 = vertices[indexes[0]], vertices[indexes[i+1]], vertices[indexes[i+2]]
+                    n1,n2,n3 = normals[normali[0]], normals[normali[i+1]], normals[normali[i+2]]
+                    face = Triangle(Point(p1.x,p1.y,p1.z,p1.color,n1),
+                                    Point(p2.x,p2.y,p2.z,p2.color,n2),
+                                    Point(p3.x,p3.y,p3.z,p3.color,n3))
+                    faces.append(face)
+                except:
+                    p1,p2,p3 = vertices[indexes[0]], vertices[indexes[i+1]], vertices[indexes[i+2]]
+                    v = normal_from_triangle(p1,p2,p3)
+                    face = Triangle(Point(p1.x,p1.y,p1.z,p1.color,v),
+                                    Point(p2.x,p2.y,p2.z,p2.color,v),
+                                    Point(p3.x,p3.y,p3.z,p3.color,v))
+                    faces.append(face)
         else:
             pass                # ignore all other information
 
@@ -400,10 +438,20 @@ def load_obj(filename):
         shaded_faces.append(new_face)
 
     if len(vertices)<=0:
-            sys.stderr.write("Model contains no vertices\n")
-            quit(1)
+           stderr.write("Model contains no vertices\n")
+           quit(1)
 
     return shaded_faces
+
+def normal_from_triangle(p1,p2,p3):
+    U = Point(p2.x-p1.x,p2.y-p1.y,p2.z-p1.z,None,None)
+    V = Point(p3.x-p1.x,p3.y-p1.y,p3.z-p1.z,None,None)
+
+    Nx = U.y*V.z - U.z*V.y
+    Ny = U.z*V.x - U.x*V.z
+    Nz = U.x*V.y - U.y*V.x
+
+    return normalize_vector((Nx,Ny,Nz))
 
 def get_camera_values(model):
     vertices = [v for t in model for v in [t.p1,t.p2,t.p3]]
@@ -419,7 +467,7 @@ def get_camera_values(model):
     center_z = (max_z + min_z) / 2
 
     # Pythagorean theorem
-    dist_from_center = min([abs(max_x-min_x), abs(max_y-min_y), abs(max_z-min_z)])
+    dist_from_center = sqrt((max_x-min_x)**2 + (max_y-min_y)**2 + (max_z-min_z)**2)
 
     return center_x,center_y,center_z,abs(max_y-min_y)
 
