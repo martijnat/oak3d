@@ -24,28 +24,24 @@ from time   import sleep
 
 columns, rows = get_terminal_size((80, 20))
 
-samples_per_pixel = 2
+samples_per_pixel = 1
 rows = rows*2*samples_per_pixel
 columns = columns * samples_per_pixel
-
 
 half_block          = "▄"
 # escape codes, send to stdout to do stuff
 esc_draw_rgb_bg     = "\x1b[48;2;%i;%i;%im"
 esc_draw_rgb_fg     = "\x1b[38;2;%i;%i;%im"
 esc_position_cursor = "\033[%i;%iH"
-esc_clear_screen    = "\033[1J"
 esc_hide_cursor     = "\033[?25l"
 esc_reset_cursor    = "\033[?25h"
 
 max_draw_dist = 99999
 
 color_fog        = (.1,.1,.1)
-color_water      = (1,0,0)
 color_default    = lambda x,y,z: (1,1,1)
 color_sun        = (1.5,1.1,1)
 color_countersun = (.2,.2,.3)
-color_sky        = (.2,.2,.2)
 
 gamma_correction = 1/2.2
 ambient_light    = (0,0,0)
@@ -55,7 +51,6 @@ angle_countersun1 = (-1,0,0)
 angle_countersun2 = (0,1,0)
 angle_countersun3 = (0,0,1)
 
-
 def main():
     try:
         if len(argv) > 1:
@@ -64,7 +59,6 @@ def main():
             stderr.write("Usage: %s /path/to/file.obj\n"%argv[0])
             quit(1)
 
-
         x,y,z,d = get_camera_values(model)
 
         global max_draw_dist
@@ -72,10 +66,8 @@ def main():
         # d = 100
 
         stdout.write(esc_hide_cursor)
-        view_steps = 200
-        dist_from_model = -0.6
 
-        steps = 200
+        steps = 256
         prerendered_screens = []
         # render the first frames manual
         for step in range(steps):
@@ -115,7 +107,6 @@ def main():
                 for screen in prerendered_screens:
                     stdout.write(screen)
                     sleep(0.01)
-
 
     except KeyboardInterrupt:
         pass
@@ -167,12 +158,10 @@ def add_lights(point,lights):
         b += _b
     return Point(point.x,point.y,point.z,(r,g,b),point.normal)
 
-
 def add_fog(p):
     return Point(p.x,p.y,p.z,
                  blend_color(p.color,color_fog,1-(p.z / max_draw_dist)),
                  p.normal)
-
 
 def draw_triangle(height,width,screen,zbuffer,p1,p2,p3):
     class Scanbuffer():
@@ -247,22 +236,6 @@ def blend_color(color1,color2,ratio):
     return ((r1*ratio + r2*(1-ratio)),
             (g1*ratio + g2*(1-ratio)),
             (b1*ratio + b2*(1-ratio)))
-
-
-def draw_line(height,width,screen,zbuffer,p1,p2):
-    "For every point visible on the line, draw a pixel"
-
-    steps = max(abs(p1.x-p2.x),abs(p1.y-p2.y))
-    if steps>0:
-        for s in range(int(steps+1)):
-            r1,r2 = s/steps, (1- s/steps)
-            x,y,z,color = r1*p1.x + r2*p2.x,\
-                          r1*p1.y + r2*p2.y,\
-                          r1*p1.z + r2*p2.z,\
-                          blend_color(p1.color,p2.color,r1)
-            add_pixel_to_screen(height,width,screen,zbuffer,x,y,z,color)
-    else:
-        return
 
 def draw_line_horizontal(height,width,screen,zbuffer,y,x1,x2,z1,z2,c1,c2):
     "For every point visible on the line, draw a pixel"
@@ -341,19 +314,8 @@ def normalize_vector(v):
 def random_vector():
     return normalize_vector((0.5-random(),0.5-random(),0.5-random()))
 
-def random_color():
-    return random(),random(),random()
-
 def dot_product(v1,v2):
     return sum([a*b for (a,b) in zip(v1,v2)])
-
-def get_terrain_color(x,y,z):
-    return color_default
-
-
-def add_point_to_screen(height,width,screen,zbuffer,point):
-    point = map_point_to_screen(point,height,width)
-    add_pixel_to_screen(height,width,screen,zbuffer,x,y,z,color)
 
 def add_pixel_to_screen(height,width,screen,zbuffer,x,y,z,color):
     if x<0 or x>= width or y<0 or y>=height:
@@ -362,7 +324,6 @@ def add_pixel_to_screen(height,width,screen,zbuffer,x,y,z,color):
         return
     screen[int(y)][int(x)] = color
     zbuffer[int(y)][int(x)] = z
-
 
 def map_point_to_screen(point,height,width,zoom=2.5,ratio=0.4):
     x,y,z,color = point.x,point.y,point.z,point.color
@@ -374,7 +335,6 @@ def map_point_to_screen(point,height,width,zoom=2.5,ratio=0.4):
 def load_obj(filename):
     "Parse an .obj file and return an array of Triangles"
     global draw_dist_min,draw_dist_max,zoomfactor
-    obj_file = open(filename)
     vertices,normals,faces = [],[],[]
     # each line represents 1 thing, we care only about
     # vertices(points) and faces(triangles)
@@ -465,9 +425,6 @@ def get_camera_values(model):
     center_x = (max_x + min_x) / 2
     center_y = (max_y + min_y) / 2
     center_z = (max_z + min_z) / 2
-
-    # Pythagorean theorem
-    dist_from_center = sqrt((max_x-min_x)**2 + (max_y-min_y)**2 + (max_z-min_z)**2)
 
     return center_x,center_y,center_z,abs(max_y-min_y)
 
