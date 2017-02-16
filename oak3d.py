@@ -21,6 +21,7 @@ from random import random
 from shutil import get_terminal_size
 from sys    import stdout,stderr,argv
 from time   import sleep
+from tqdm   import tqdm
 
 columns, rows = get_terminal_size((80, 20))
 
@@ -80,8 +81,13 @@ def main():
                             u,v+pi,w)
             screen  = new_screen(rows,columns)
             zbuffer = new_zbuffer(rows,columns)
-            for triangle in model:
-                draw_triangle_relative(rows,columns,screen,zbuffer,triangle,camera)
+            if step==0:
+                for triangle in tqdm(model,desc="Drawing First frame.."):
+                    draw_triangle_relative(rows,columns,screen,zbuffer,triangle,camera)
+            else:
+                for triangle in model:
+                    draw_triangle_relative(rows,columns,screen,zbuffer,triangle,camera)
+
             print_string = print_screen(rows,columns,screen,stdout)
             prerendered_screens.append(print_string)
 
@@ -254,7 +260,7 @@ def draw_line_horizontal(height,width,screen,zbuffer,y,x1,x2,z1,z2,c1,c2):
         ratio = (float(x) - x1) / (float(x2) - x1)
         color = blend_color(c2,c1,ratio)
         z     = z1*(1-ratio) + z2*(ratio)
-        add_pixel_to_screen(height,width,screen,zbuffer,x,y,z,color)
+        add_pixel_to_screen(height,width,screen,zbuffer,width-x,y,z,color)
 
 def new_screen(height,width):
     return [[color_fog for x in range(width)] for y in range(height)]
@@ -338,7 +344,7 @@ def load_obj(filename):
     vertices,normals,faces = [],[],[]
     # each line represents 1 thing, we care only about
     # vertices(points) and faces(triangles)
-    for linenumber,line in enumerate(open(filename).readlines()):
+    for linenumber,line in tqdm(enumerate(open(filename).readlines()),desc="Parsing Model..."):
         c = line[0]
         if c == "v":            # vertices information
             if line[1] in "t":  # We ignore textures
@@ -388,7 +394,7 @@ def load_obj(filename):
 
     # add lighting
     shaded_faces = []
-    for face in faces:
+    for face in tqdm(faces,desc="Applying lighting"):
         p1,p2,p3 = face.p1,face.p2,face.p3
         p1,p2,p3 = map((lambda p:add_lights(p,[(color_sun,normalize_vector(angle_sun)),
                                           (color_countersun,normalize_vector(angle_countersun1)),
