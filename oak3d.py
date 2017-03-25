@@ -71,7 +71,7 @@ def main():
 
         stdout.write(esc_hide_cursor)
 
-        steps = 64
+        steps = 256
         prerendered_screens = []
         # render the first frames manual
         for step in range(steps):
