@@ -39,12 +39,12 @@ esc_reset_cursor = "\033[?25h"
 
 max_draw_dist = 99999
 
-color_fog = (.25, .5, 1.0)
+color_fog = (.1, .2, .4)
 color_base = (1.0,1.0,1.0)
 color_var = (0.0,0.0,0.0)
 color_default = lambda x, y, z: [b+(v*random()*2)-v for b,v in zip(color_base,color_var)]
 color_sun = (1.5, 1.1, 1)
-color_countersun = (.2, .2, .3)
+color_countersun = (.1, .2, .4)
 
 gamma_correction = 1 / 2.2
 ambient_light = (0, 0, 0)
@@ -120,7 +120,8 @@ def main():
                     sleep(0.01)
 
     except KeyboardInterrupt:
-        pass
+        stdout.write(esc_draw_rgb_bg%(0,0,0))
+        stdout.write(esc_draw_rgb_fg%(255,255,255))
     finally:
         stdout.write(esc_reset_cursor)
 
@@ -321,12 +322,10 @@ def point_relative_to_camera(point, camera):
     y = point.y - camera.y
     z = point.z - camera.z
 
-    x, y, z = rotate_3d(x, y, z,
-                        camera.u, camera.v, camera.w)
+    x, y, z = rotate_3d(x, y, z, camera.u, camera.v, camera.w)
 
     n1, n2, n3 = point.normal
-    new_normal = rotate_3d(n1, n2, n3,
-                           camera.u, camera.v, camera.w)
+    new_normal = rotate_3d(n1, n2, n3, camera.u, camera.v, camera.w)
 
     return Point(x, y, z, point.color, new_normal)
 
@@ -442,10 +441,8 @@ def load_obj(filename):
     for face in tqdm(faces, desc="Applying lighting"):
         p1, p2, p3 = face.p1, face.p2, face.p3
         p1, p2, p3 = map((lambda p: add_lights(p, [(color_sun, normalize_vector(angle_sun)),
-                                                   (color_countersun, normalize_vector(
-                                                       angle_countersun1)),
-                                                   (color_countersun, normalize_vector(
-                                                       angle_countersun2)),
+                                                   (color_countersun, normalize_vector(angle_countersun1)),
+                                                   (color_countersun, normalize_vector(angle_countersun2)),
                                                    (color_countersun, normalize_vector(angle_countersun3))])), [p1, p2, p3])
         new_face = Triangle(p1, p2, p3)
         shaded_faces.append(new_face)
