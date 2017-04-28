@@ -39,14 +39,14 @@ esc_reset_cursor = "\033[?25h"
 
 max_draw_dist = 99999
 
-color_fog = (.1, .2, .4)
+color_fog = (.05, .1, .2)
 color_base = (1.0,1.0,1.0)
 color_var = (0.0,0.0,0.0)
 color_default = lambda x, y, z: [b+(v*random()*2)-v for b,v in zip(color_base,color_var)]
 color_sun = (1.5, 1.1, 1)
-color_countersun = (.1, .2, .4)
+color_countersun = (.1, .1, .1)
 
-gamma_correction = 1 / 2.2
+gamma_correction = 1/2.2
 ambient_light = (0, 0, 0)
 
 angle_sun = (1, -1, -1)
