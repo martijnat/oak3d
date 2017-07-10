@@ -66,7 +66,7 @@ def main():
         x, y, z, d = get_camera_values(model)
 
         global max_draw_dist
-        max_draw_dist = d * 2
+        max_draw_dist = d * 3
         # d = 100
 
         stdout.write(esc_hide_cursor)
