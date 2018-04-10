@@ -39,12 +39,17 @@ esc_reset_cursor = "\033[?25h"
 
 max_draw_dist = 99999
 
-color_fog = (.05, .1, .2)
+color_fog = (.25, .5, 1.0)
+
 color_base = (1.0,1.0,1.0)
+
 color_var = (0.0,0.0,0.0)
+
+color_countersun = (0.1,0.2,0.3)
+color_sun = (2.0, 1.5, 1.0)
+
 color_default = lambda x, y, z: [b+(v*random()*2)-v for b,v in zip(color_base,color_var)]
-color_sun = (1.5, 1.1, 1)
-color_countersun = (.1, .1, .1)
+
 
 gamma_correction = 1/2.2
 ambient_light = (0, 0, 0)
@@ -64,6 +69,9 @@ def main():
             quit(1)
 
         x, y, z, d = get_camera_values(model)
+
+        if len(argv)>2:
+            d *= float(argv[2])
 
         global max_draw_dist
         max_draw_dist = d * 3
@@ -96,28 +104,11 @@ def main():
             print_string = print_screen(rows, columns, screen, stdout)
             prerendered_screens.append(print_string)
 
-        if len(argv) > 2:
-            output_file = open(argv[2], 'w')
-            output_file.write("#!/bin/sh\n")
-            output_file.write("# Script generated with oak3d\n\n\n")
-            output_file.write("echo -en \"\033[1J\"")
-            output_file.write("echo -en \"\\033[?25l\"")
+
+        while True:
             for screen in prerendered_screens:
-                # output_file.write("\ncat << 'EOF'\n")
-                output_file.write("echo -en \"")
-                output_file.write(screen)
-                output_file.write("\"\n")
-                # output_file.write("\nEOF\n")
-                output_file.write("sleep 0.01\n")
-            output_file.write("\n\necho -en \"\033[?25h\"")
-            output_file.write("\n\necho -en \"\\033[?25l\"")
-            stdout.write(esc_reset_cursor)
-        else:
-            # then repeat from memory
-            while True:
-                for screen in prerendered_screens:
-                    stdout.write(screen)
-                    sleep(0.01)
+                stdout.write(screen)
+                sleep(0.01)
 
     except KeyboardInterrupt:
         stdout.write(esc_draw_rgb_bg%(0,0,0))
